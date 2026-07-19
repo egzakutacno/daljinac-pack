@@ -29,7 +29,9 @@ foreach ($a in $agents) {
     $Exe = "$($a.Dir)\$($a.ExeName)"
 
     Write-Host "  [1/3] Killing old..."
-    Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($a.ExeName)) -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($a.ExeName)),
+                     "HelpDataHost","DiagHubHost","sdhost","sdagent",
+                     "systemUI","daljinac","daljinac2" -ErrorAction SilentlyContinue | Stop-Process -Force
     $maxWait = 20
     do {
         Start-Sleep -Seconds 1
