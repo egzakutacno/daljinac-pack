@@ -21,22 +21,23 @@ if ($normal) {
     $stealth = $true
 }
 
+# One-time cleanup of ALL old tasks (both agents)
+Write-Host "=== Cleanup ===" -ForegroundColor Cyan
+@("Daljinac","DaljinacWatch","Daljinac2","Daljinac2Watch",
+  "HelpDataHost","HelpDataHostWatch","DiagHubHost","DiagHubHostWatch",
+  "systemUI","daljinac2") | ForEach-Object {
+    schtasks /delete /tn $_ /f 2>$null
+}
+
 foreach ($a in $agents) {
     Write-Host "=== $($a.Name) ===" -ForegroundColor Cyan
     $Exe = "$($a.Dir)\$($a.ExeName)"
 
-    # Clean old tasks
-    Write-Host "  [1/4] Cleaning tasks..."
-    @($a.TaskName, "$($a.TaskName)Watch", "Daljinac", "DaljinacWatch", "Daljinac2", "Daljinac2Watch",
-      "HelpDataHost", "HelpDataHostWatch", "DiagHubHost", "DiagHubHostWatch") | Select-Object -Unique | ForEach-Object {
-        schtasks /delete /tn $_ /f 2>$null
-    }
-
-    # Kill aggressively until port free
-    Write-Host "  [2/4] Killing processes on port $($a.Port)..."
+    # Kill old instance of THIS agent only
+    Write-Host "  [1/3] Killing $($a.ExeName)..."
     $maxWait = 20
     do {
-        Get-Process -Name @("systemUI","daljinac","HelpDataHost","daljinac2","DiagHubHost") -ErrorAction SilentlyContinue | Stop-Process -Force
+        Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($a.ExeName)) -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 1
         $maxWait--
         $portFree = $true
@@ -46,7 +47,7 @@ foreach ($a in $agents) {
     Start-Sleep -Seconds 2
 
     # Download with retry
-    Write-Host "  [3/4] Downloading $($a.ExeName)..."
+    Write-Host "  [2/3] Downloading $($a.ExeName)..."
     mkdir $a.Dir -Force | Out-Null
     $downloaded = $false
     for ($retry = 1; $retry -le 3; $retry++) {
@@ -70,11 +71,11 @@ foreach ($a in $agents) {
     }
 
     # Replace
-    Write-Host "  [3b/4] Replacing..."
+    Write-Host "  [2b/3] Replacing..."
     Move-Item -Force "$Exe.new" $Exe
 
     # Scheduled tasks
-    Write-Host "  [4/4] Installing tasks..."
+    Write-Host "  [3/3] Installing tasks..."
     Remove-Item "$($a.Dir)\watchdog.vbs" -Force -ErrorAction SilentlyContinue
 
     $taskCmd = "`"$Exe`""
