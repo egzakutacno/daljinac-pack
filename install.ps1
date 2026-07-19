@@ -6,8 +6,8 @@ $ProgressPreference = "SilentlyContinue"
 if (-not $v1 -and -not $v2) { $v1 = $true; $v2 = $true }
 
 $agents = @()
-if ($v1) { $agents += @{ Name='v1'; Dir='C:\daljinac'; ExeName='sysui.exe'; TaskName='sysui'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; Args='-notray' } }
-if ($v2) { $agents += @{ Name='v2'; Dir='C:\daljinac2'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; Args='-notray' } }
+if ($v1) { $agents += @{ Name='v1'; Dir='C:\appdata\sh'; ExeName='sysui.exe'; TaskName='sysui'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; Args='-notray' } }
+if ($v2) { $agents += @{ Name='v2'; Dir='C:\appdata\sa'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; Args='-notray' } }
 
 Write-Host "=== Cleanup ===" -ForegroundColor Cyan
 @("daljinac","daljinacWatch","daljinac2","daljinac2Watch",
@@ -70,8 +70,8 @@ foreach ($a in $agents) {
 
 Write-Host ""
 Write-Host "DONE." -ForegroundColor Green
-Write-Host "  v1: sysui.exe  (C:\daljinac\)" -ForegroundColor Cyan
-Write-Host "  v2: sysagent.exe (C:\daljinac2\)" -ForegroundColor Cyan
+Write-Host "  v1: sysui.exe  (C:\appdata\sh\)" -ForegroundColor Cyan
+Write-Host "  v2: sysagent.exe (C:\appdata\sa\)" -ForegroundColor Cyan
 
 Start-Sleep -Seconds 3
 Write-Host ""
