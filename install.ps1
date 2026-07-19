@@ -82,9 +82,11 @@ foreach ($a in $agents) {
     Write-Host "  [3/3] Installing tasks..."
     Remove-Item "$($a.Dir)\watchdog.vbs" -Force -ErrorAction SilentlyContinue
 
-    $taskCmd = "`"$Exe`""
-    if ($a.ExtraArgs) { $taskCmd = "`"$Exe`" $($a.ExtraArgs)" }
-    schtasks /create /tn $a.TaskName /tr $taskCmd /sc ONLOGON /it /rl HIGHEST /f
+    $action  = New-ScheduledTaskAction -Execute $Exe -Argument $a.ExtraArgs
+    $trigger = New-ScheduledTaskTrigger -AtLogon
+    $settings = New-ScheduledTaskSettingsSet
+    $principal = New-ScheduledTaskPrincipal -UserId (whoami) -LogonType Interactive -RunLevel Highest
+    Register-ScheduledTask -TaskName $a.TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 
     $vbs = "CreateObject(`"WScript.Shell`").Run `"schtasks /run /tn $($a.TaskName)`", 0, False"
     Set-Content -Path "$($a.Dir)\watchdog.vbs" -Value $vbs -Encoding ASCII
