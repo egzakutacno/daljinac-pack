@@ -18,14 +18,17 @@ Ako čitaš ovo, korisnik te uputio ovdje da razumiješ kako daljinac funkcioni�
 
 ```
 Windows Mašina                    VPS (31.220.74.109)              RPi (kontrolni centar)
-┌─────────────────────┐           ┌──────────────────┐           ┌──────────────────────┐
-│ v1: sysui.exe       │──SSH-R──→│ port 7081-7085    │←──SSH-L──│ localhost:7081        │
-│     REST API :8081  │           │                  │           │                      │
-│ v2: sysagent.exe    │──SSH-R──→│ port 7181-7200    │←──SSH-L──│ localhost:7181-7200   │
-│     MCP server :1984│           │                  │           │                      │
-│                     │           │ Relay :9999       │           │ dalj CLI             │
-│ Tailscale (opciono) │           │ (file transfer)   │           │ v1transfer           │
-└─────────────────────┘           └──────────────────┘           └──────────────────────┘
+┌─────────────────────┐           ┌──────────────────────┐           ┌──────────────────────┐
+│ v1: sysui.exe       │──SSH-R──→│ port 7081-7090        │←──SSH-L──│ localhost:7081-7090   │
+│     REST API :8081  │           │                      │           │                      │
+│ v2: sysagent.exe    │──SSH-R──→│ port 7181-7200        │←──SSH-L──│ localhost:7181-7200   │
+│     MCP server :1984│           │                      │           │                      │
+│                     │           │ Relay :9999           │           │ dalj CLI             │
+│ aria2c.exe (opciono)│           │  + HTTP Range (206)   │           │ v1transfer           │
+│ (C:\appdata\)       │           │  + /pull (curl/aria2) │           │                      │
+│                     │           │  + /register (discover)│           │                      │
+│ Tailscale (opciono) │           │  + aria2c install     │           │                      │
+└─────────────────────┘           └──────────────────────┘           └──────────────────────┘
 ```
 
 - **SSH-R**: Reverse tunnel (Windows → VPS). Agent inicira SSH konekciju ka VPS-u i otvara port za dolazne veze.
@@ -45,7 +48,8 @@ Windows Mašina                    VPS (31.220.74.109)              RPi (kontrol
 | **Tailscale** | Ne | Da, ako je dostupno (100.x.x.x:1984) |
 | **Tray** | Da (opciono, `-notray` gasi) | Da (opciono, `-notray` gasi) |
 | **Update** | `/api/update` (POST) | `/api/update` (POST, od v2.0.0-dev.20260719.4) |
-| **File transfer** | `/api/ps` + Invoke-WebRequest → VPS relay | `/api/ps` + Invoke-WebRequest → VPS relay |
+| **File transfer** | VPS relay (`/pull` + `/register`) ili aria2c | VPS relay (`/pull` + `/register`) ili aria2c |
+| **Aria2** | Opcionalno, automatski bootstrap | Opcionalno, automatski bootstrap |
 | **Dependencies** | Samo Go stdlib + crypto fork (256KB SSH) | Go stdlib + mcp-go + gopsutil + screenshots |
 | **Binary size** | ~7.5MB | ~11MB |
 | **Verzija** | 2.6.32 | 2.0.0-dev.20260719.4 |
@@ -63,8 +67,9 @@ iex (irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/instal
 Ovo instalira oba agenta u `-notray` modu (bez tray ikonice):
 - **v1**: `C:\appdata\sh\sysui.exe` (port 8081)
 - **v2**: `C:\appdata\sa\sysagent.exe` (port 1984)
+- **aria2c**: `C:\appdata\aria2c.exe` (automatski, preko `DaljinacBootstrap` taska)
 
-Scheduled taskovi: `sysui` / `sysuiWatch`, `sysagent` / `sysagentWatch` (ONLOGON + watchdog svakih 5 min).
+Scheduled taskovi: `sysui` / `sysuiWatch`, `sysagent` / `sysagentWatch`, `DaljinacBootstrap`.
 
 ### Samo jedan agent
 
@@ -107,18 +112,38 @@ void loop() {
 
 ## Port mappings (trenutne mašine)
 
-V1 portovi (hardcodirani u `tunnel/ssh.go`):
+**VAŽNO: Portovi nisu fiksni.** V1 portovi su hardcodirani u `tunnel/ssh.go`, ali se mogu promijeniti ako se doda nova mašina koja nije u mapi (dobije default 7081). V2 portovi su dinamički (daemon-assigned). **Uvijek koristi `/register` za trenutnu mapu.**
 
+```bash
+# Automatsko otkrivanje svih online mašina (v1 + v2)
+curl -s http://31.220.74.109:9999/register | python3 -m json.tool
+```
+
+Primjer izlaza:
+```json
+[
+  {"port": 7081, "hostname": "legion", "version": "v1"},
+  {"port": 7082, "hostname": "DESKTOP-INJ3O0L", "version": "v1"},
+  {"port": 7083, "hostname": "DESKTOP-S43UKD6", "version": "v1"},
+  {"port": 7084, "hostname": "DESKTOP-BA967G1", "version": "v1"},
+  {"port": 7182, "hostname": "DESKTOP-S43UKD6", "version": "v2"},
+  {"port": 7185, "hostname": "DESKTOP-INJ3O0L", "version": "v2"},
+  {"port": 7186, "hostname": "legion", "version": "v2"}
+]
+```
+
+### V1 hardcodirana mapa (u `tunnel/ssh.go`)
 | Port | Hostname | Alias |
 |------|----------|-------|
-| 7081 | DESKTOP-INJ3O0L | INJ3 (glavni PC) |
-| 7082 | DESKTOP-S43UKD6 | S43 (Beelink) |
-| 7083 | USERMIC-M3SII9L | USERMIC (poslovni) |
-| 7084 | DESKTOP-BA967G1 | BA967G1 (Zoran) |
-| 7085 | SANDOKAN | sandokan |
+| 7081 | desktop-inj3o0l | INJ3 (glavni PC) |
+| 7082 | desktop-s43ukd6 | S43 (Beelink) |
+| 7083 | usermic-m3sii9l | USERMIC (poslovni — OFFLINE) |
+| 7084 | desktop-ba967g1 | BA967G1 |
+| 7085 | sandokan | sandokan (OFFLINE) |
 
-V2 portovi (dynamic, assigned by SSH daemon on VPS via `registerWithDaemon()`):
+Mašine koje nisu u mapi (npr. `legion`) dobijaju default 7081 i mogu izazvati konflikt. Dodaj novu mašinu u mapu i rebuild-uj binary za stabilan port.
 
+### V2 dinamički portovi
 V2 agent se javlja VPS daemonu na portu 7199 (`curl http://127.0.0.1:7199/register?hostname=...`), koji mu dodjeljuje slobodan port u opsegu 7181-7200. Zato se portovi v2 mogu mijenjati između restart-ova.
 
 ---
@@ -232,44 +257,87 @@ Za komande tipa `whoami`, `ipconfig`, `netstat`, `hostname` — v2 pokušava dir
 
 ---
 
-## File Transfer (VPS Relay)
+## File Transfer (VPS Relay + Aria2)
 
-Za transfere veće od 1MB koristimo VPS relay server (31.220.74.109:9999). Ne koristimo SSH tunel za file transfer.
+Za transfere veće od 1MB koristimo VPS relay server (31.220.74.109:9999).
 
 ### Arhitektura
 
 ```
-Source Machine ──POST──→ VPS:9999/ime_fajla ──GET──→ Target Machine
-                         (privremeno skladište)
+┌──────────────┐   /pull (curl)   ┌──────────────┐   aria2c -x16   ┌──────────────┐
+│ Source mašina │───SSH tunel────→│ VPS relay    │───────────────→│ Target mašina │
+│ (v1 agent)    │    ~5 MB/s      │ :9999        │  ~11 MiB/s     │ (aria2c)      │
+└──────────────┘                  │              │                └──────────────┘
+                                  │ /tmp/relay/  │
+                                  │              │
+                                  │ + Range (206)│
+                                  │ + /register  │
+                                  └──────────────┘
 ```
 
-### Kako koristiti
+Dva načina:
+
+### Način 1: Pull (preporučeno — brži upload)
+
+VPS povlači fajl sa izvorne mašine kroz SSH tunel, a ciljna mašina skida sa VPS-a preko aria2 (multi-connection).
+
+```bash
+# 1. Pull fajl sa INJ3 (port 7082) na VPS relay
+curl -X POST http://31.220.74.109:9999/pull \
+  -H "Content-Type: application/json" \
+  -d '{"port":7082,"path":"E:\\folder\\fajl.zip","filename":"fajl.zip"}'
+# Odgovor: {"status":"ok","size":210670368,"filename":"fajl.zip"}
+
+# 2. Skini sa VPS relay na ciljnu mašinu (npr. Beelink) preko aria2
+aria2c -x16 -s16 http://31.220.74.109:9999/fajl.zip -d C:\Users\user\Desktop
+
+# Preko daljinac v1 agenta:
+curl -X POST "http://localhost:7083/api/ps" -H "Content-Type: application/json" \
+  -d '{"command":"C:\\appdata\\aria2c.exe -x16 -s16 -d C:\\Users\\egzakutacno\\Desktop http://31.220.74.109:9999/fajl.zip"}'
+```
+
+Ako fajl nije na SYSTEM-accessible lokaciji (npr. E: drive user-a), koristi `pre_cmd`:
+```bash
+# Kopiraj fajl na temp lokaciju prije pull-a
+curl -X POST http://31.220.74.109:9999/pull -H "Content-Type: application/json" \
+  -d '{"port":7082,"path":"C:\\ProgramData\\temp_copy.zip","filename":"fajl.zip",
+       "pre_cmd":"cmd /c copy \"E:\\folder\\fajl.zip\" C:\\ProgramData\\temp_copy.zip /y"}'
+```
+
+### Način 2: Push (stari — sporiji upload)
+
+Upload sa izvorne mašine direktno na VPS relay (Invoke-WebRequest), pa download na ciljnu.
 
 **Upload** (sa izvorne mašine):
 ```powershell
-$bytes = [System.IO.File]::ReadAllBytes("C:\source\file.exe")
-Invoke-WebRequest -Uri http://31.220.74.109:9999/file.exe `
-  -Method POST -Body $bytes -ContentType "application/octet-stream"
+Invoke-WebRequest -Uri http://31.220.74.109:9999/file.exe ^
+  -Method POST -InFile "C:\source\file.exe" -UseBasicParsing
 ```
 
-**Download** (na ciljnu mašinu):
+**Download** (na ciljnu mašinu — preporučuje se aria2 za brže multi-connection skidanje):
 ```powershell
-Invoke-WebRequest -Uri http://31.220.74.109:9999/file.exe `
-  -OutFile "C:\target\file.exe" -UseBasicParsing
+aria2c -x16 -s16 -d C:\target http://31.220.74.109:9999/file.exe
 ```
 
-**Kroz daljinac v1 (preko /api/ps):**
-```bash
-# Upload
-curl -X POST "http://localhost:7081/api/ps" -H "Content-Type: application/json" \
-  -d '{"command":"$b=[IO.File]::ReadAllBytes(\"C:\\file.exe\");IWR http://31.220.74.109:9999/file.exe -M POST -B $b -CT application/octet-stream"}'
+### Poređenje brzina (210MB, INJ3 → Beelind)
 
-# Download
-curl -X POST "http://localhost:7082/api/ps" -H "Content-Type: application/json" \
-  -d '{"command":"IWR http://31.220.74.109:9999/file.exe -OutFile C:\\file.exe -UseBasicParsing"}'
+| Metod | Upload | Download | Ukupno |
+|-------|--------|----------|--------|
+| Push (iwr POST) | 92s (2.3 MB/s) | 19s (11 MiB/s) | **112s** |
+| Pull (SSH + aria2) | 41s (5.1 MB/s) | 21s (10 MiB/s) | **62s** |
+
+### Aria2 automatska instalacija
+
+Prilikom instalacije (putem `install.ps1`), kreira se `DaljinacBootstrap` scheduled task koji automatski skida `aria2c.exe` sa VPS relay-a na svaku mašinu (single binary, portable, ~5.4MB).
+
+```powershell
+# Ručno (ako je mašina instalirana prije nego što je dodan bootstrap)
+Invoke-WebRequest http://31.220.74.109:9999/aria2c.exe -OutFile C:\appdata\aria2c.exe -UseBasicParsing
 ```
 
-**Brisanje nakon transfera:**
+Aria2 je opcionalan — bez njega radi i `Invoke-WebRequest`, ali sporije i bez resume podrške.
+
+### Brisanje nakon transfera
 ```bash
 curl -X DELETE http://31.220.74.109:9999/file.exe
 ```
@@ -277,9 +345,26 @@ curl -X DELETE http://31.220.74.109:9999/file.exe
 ### Relay server
 
 Script: `/home/ruter/projekti/daljinac-pack/relay.py` (takođe na GitHub-u)
-Location: VPS `/tmp/vps-relay.py`
-Start: `@reboot` cronjob, port 9999
+Location: VPS `/root/relay.py`
+Service: `systemd` (`/etc/systemd/system/relay.service`), auto-restart
+Port: 9999
 Fast: ~8-12 MB/s (INJ3), 4-6 MB/s (Beelink kroz VPN)
+
+#### Endpointi
+
+| Endpoint | Metod | Opis |
+|----------|-------|------|
+| `/:filename` | POST | Upload fajla (raw body) |
+| `/:filename` | GET | Download fajla (podržava HTTP Range 206 za multi-connection) |
+| `/:filename` | DELETE | Brisanje fajla |
+| `/register` | GET | Skenira sve V1 (7081-7090) i V2 (7181-7200) portove, vraća listu online mašina (port, hostname, version) |
+| `/pull` | POST `{"port":7082,"path":"C:\\...","filename":"f.zip","pre_cmd":"..."}` | VPS povlači fajl sa agenta kroz SSH tunel |
+
+#### Karakteristike
+
+- **HTTP Range (206 Partial Content)**: Aria2 multi-connection download
+- **Streaming read/write**: Ne učitava ceo fajl u memoriju (64KB chunkovi)
+- **Systemd servis**: `systemctl restart relay` za restart
 
 **Brzi test da li relay radi:**
 ```bash
@@ -314,11 +399,14 @@ C:\appdata\
 │   ├── watchdog.vbs
 │   ├── sysui.log
 │   └── .ssh\
-└── sa\                # v2
-    ├── sysagent.exe
-    ├── watchdog.vbs
-    ├── sysagent.log
-    └── .ssh\
+├── sa\                # v2
+│   ├── sysagent.exe
+│   ├── watchdog.vbs
+│   ├── sysagent.log
+│   └── .ssh\
+├── aria2c.exe         # (opcionalno, automatski download)
+├── bootstrap.cmd      # DaljinacBootstrap scheduled task skripta
+└── bootstrap.ps1      # (alternativno)
 ```
 
 ### Scheduled Tasks
@@ -328,7 +416,10 @@ sysuiWatch         → wscript.exe watchdog.vbs         (svakih 5 min)
 
 sysagent           → C:\appdata\sa\sysagent.exe -notray (ONLOGON, HIGHEST)
 sysagentWatch      → wscript.exe watchdog.vbs           (svakih 5 min)
-```
+
+DaljinacBootstrap  → bootstrap.cmd                      (ONLOGON + 1 min)
+                     Ako aria2c.exe ne postoji → skini sa relay-a
+                     Ako uspije → obriši sam sebe
 
 ---
 
@@ -356,36 +447,47 @@ sysagentWatch      → wscript.exe watchdog.vbs           (svakih 5 min)
 - `Stop-Process -Name explorer -Force; Start-Process explorer` restartuje Explorer
 - Ili jednostavno ignoriši — agent radi i bez responsive ikone
 
+### UAC Virtualizacija (v1 SYSTEM vs v2 user)
+- v1 agent (sysui.exe) često radi kao SYSTEM, v2 (sysagent.exe) radi kao logovani user
+- Fajlovi koje user kreira u `C:\appdata\` mogu biti redirect-ovani u VirtualStore
+- v1 (SYSTEM) ne vidi te fajlove — koristi `C:\Windows\Temp\` ili `C:\ProgramData\` za razmjenu
+- `/pull` endpoint podržava `pre_cmd` da kopira fajl prije download-a
+
 ### V2 SSH tunnel port mijenja se između restart-ova
-- Skeniraj portove 7181-7200: `for p in $(seq 7181 7200); do curl ... localhost:$p/api/info; done`
-- Ili koristi `/health` endpoint: `curl localhost:718X/health`
+- Koristi `/register` za automatsko otkrivanje portova:
+  ```bash
+  curl -s http://31.220.74.109:9999/register | python3 -m json.tool
+  ```
 
 ### Tailscale IP za INJ3 se povremeno mijenja
 - Aktuelni IP provjeri sa: `tailscale status | grep inj3`
 - Tailscale nije dostupan na svim mašinama (samo INJ3)
 
-### V1 log file lokacija
-- Log je u istom folderu kao i binary: `$exeDir\$baseName.log`
-- Za stealth instalaciju: `C:\appdata\sh\sysui.log`
+### Tastatura na Legionu ne radi na AC boot-u
+- EC firmware bug: tastatura se ne inicijalizuje kad je AC priključen tokom POST-a
+- Workaround: boot na bateriju, pa uključi AC nakon što nestane Legion logo
+- MCP keyboard_type i dalje rade (SendInput API)
+- BHCN45WW = posljednji BIOS (nema novijeg)
 
 ---
 
 ## Brza dijagnostika
 
 ```bash
-# 1. Koje v1 mašine su online?
+# 1. Koje mašine su online (v1 + v2)?
+curl -s http://31.220.74.109:9999/register | python3 -m json.tool
+
+# 2. Da li relay radi?
+curl -s -o /dev/null -w "%{http_code}" http://31.220.74.109:9999/test
+
+# 3. Koje v1 mašine su online? (ručno, ako /register ne radi)
 for p in 7081 7082 7083 7084 7085; do
   echo -n "$p: "; curl -s --connect-timeout 2 "http://localhost:$p/api/info" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['hostname'],d['version'])" 2>/dev/null || echo "OFFLINE"
 done
 
-# 2. Koje v2 mašine su online?
-for p in $(seq 7181 7200); do
-  r=$(curl -s --connect-timeout 1 "http://localhost:$p/health" 2>/dev/null)
-  [ -n "$r" ] && echo "port $p: $r"
-done
-
-# 3. Da li relay radi?
-curl -s -o /dev/null -w "%{http_code}" http://31.220.74.109:9999/test
+# 4. Da li su procesi živi na mašini?
+curl -X POST "http://localhost:7081/api/ps" -H "Content-Type: application/json" \
+  -d '{"command":"powershell Get-Process sysui,sysagent -ErrorAction SilentlyContinue | Select Id,ProcessName"}'
 ```
 
 ---
@@ -439,5 +541,9 @@ RPi koristi `~/.ssh/daljinac_key` za direktan SSH pristup VPS-u (za deploy relay
 - Location-agnostic (binary derivira putanje iz sopstvene lokacije)
 - `/api/update` endpoint na v2
 - Native shell (direktno CreateProcessW, nema cmd wrapper-a)
-- VPS relay za file transfer
+- VPS relay za file transfer (+ HTTP Range, /pull, /register)
+- Aria2 integracija (automatski bootstrap na svaku mašinu)
 - Defender exclusion automatski
+- `/register` endpoint za automatsko otkrivanje online mašina
+- Relay server kao systemd servis (auto-restart)
+- `DaljinacBootstrap` scheduled task za aria2 download
