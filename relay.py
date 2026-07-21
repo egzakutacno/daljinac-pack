@@ -100,7 +100,7 @@ class RelayHandler(BaseHTTPRequestHandler):
                 try:
                     data = json.dumps({"command": "hostname", "timeout": 5}).encode()
                     r = urllib.request.urlopen(urllib.request.Request(
-                        f"http://127.0.0.1:{p}/api/ps", data, {"Content-Type": "application/json"}), timeout=4)
+                        f"http://127.0.0.1:{p}/api/ps", data, {"Content-Type": "application/json"}), timeout=3)
                     body = json.loads(r.read())
                     hn = body.get('stdout', '').strip()
                     if hn:
@@ -109,23 +109,23 @@ class RelayHandler(BaseHTTPRequestHandler):
 
             def scan_v2(p):
                 try:
-                    import uuid
-                    sid = str(uuid.uuid4())
                     data = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
                         "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "r"}}}).encode()
-                    req = urllib.request.Request(f"http://127.0.0.1:{p}/mcp", data, {
-                        "Content-Type": "application/json", "Authorization": "Bearer 916de2678b4319090a640799f7ca7a6e"})
-                    r = urllib.request.urlopen(req, timeout=4)
+                    hdrs = {"Content-Type": "application/json", "Authorization": "Bearer 916de2678b4319090a640799f7ca7a6e"}
+                    req = urllib.request.Request(f"http://127.0.0.1:{p}/mcp", data, hdrs)
+                    r = urllib.request.urlopen(req, timeout=3)
                     body = json.loads(r.read())
                     if 'result' in body:
-                        hdr = {k.lower(): v for k, v in r.headers.items()}
-                        sid = hdr.get('mcp-session-id', str(uuid.uuid4()))
+                        sid = {k.lower(): v for k, v in r.headers.items()}.get('mcp-session-id', '')
+                        if not sid:
+                            with lock: agents.append({"port": p, "hostname": "", "version": "v2"})
+                            return
                         data2 = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                            "params": {"name": "shell", "arguments": {"command": "hostname", "timeout": 5}}}).encode()
-                        req2 = urllib.request.Request(f"http://127.0.0.1:{p}/mcp", data2, {
-                            "Content-Type": "application/json", "Authorization": "Bearer 916de2678b4319090a640799f7ca7a6e",
-                            "Mcp-Session-Id": sid})
-                        r2 = urllib.request.urlopen(req2, timeout=5)
+                            "params": {"name": "shell", "arguments": {"command": "hostname", "timeout": 3}}}).encode()
+                        hdrs2 = dict(hdrs)
+                        hdrs2["Mcp-Session-Id"] = sid
+                        req2 = urllib.request.Request(f"http://127.0.0.1:{p}/mcp", data2, hdrs2)
+                        r2 = urllib.request.urlopen(req2, timeout=4)
                         body2 = json.loads(r2.read())
                         text = body2.get('result', {}).get('content', [{}])[0].get('text', '')
                         hn = [l.strip() for l in text.split('\n') if l.strip()][-1] if text.strip() else ''
