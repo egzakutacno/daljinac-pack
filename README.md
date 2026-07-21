@@ -43,7 +43,7 @@ Windows Mašina                    VPS (31.220.74.109)              RPi (kontrol
 |---|---|---|
 | **Tip** | REST API HTTP server | MCP Streamable HTTP server |
 | **Port** | 8081 | 1984 |
-| **Auth** | Nema (otvoreni endpointi) | Bearer token `234d130007706cd69359c94b89d3dd70` |
+| **Auth** | Nema (otvoreni endpointi) | Bearer token `<TOKEN>` |
 | **SSH tunnel** | Portovi 7081-7100 (mapirani po hostname-u) | Portovi 7181-7200 (daemon-assigned) |
 | **Tailscale** | Ne | Da, ako je dostupno (100.x.x.x:1984) |
 | **Tray** | Da (opciono, `-notray` gasi) | Da (opciono, `-notray` gasi) |
@@ -197,7 +197,7 @@ curl -s -X POST "http://localhost:7081/api/ps" -H "Content-Type: application/jso
 
 ### Auth
 
-Bearer token: `234d130007706cd69359c94b89d3dd70`
+Bearer token: `<TOKEN>`
 
 ### MCP Handshake
 
@@ -208,13 +208,13 @@ Svaki zahtjev zahtijeva session:
 
 ```bash
 INIT=$(curl -s -D - http://localhost:7182/mcp \
-  -H "Authorization: Bearer 234d130007706cd69359c94b89d3dd70" \
+  -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"cli","version":"1.0"}}}')
 SESSION=$(echo "$INIT" | grep -i "mcp-session-id:" | awk '{print $2}' | tr -d '\r')
 
 curl -s http://localhost:7182/mcp \
-  -H "Authorization: Bearer 234d130007706cd69359c94b89d3dd70" \
+  -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -H "Mcp-Session-Id: $SESSION" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"shell","arguments":{"command":"hostname","timeout":10}}}'
