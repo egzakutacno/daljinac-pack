@@ -3,6 +3,7 @@ import os, json, urllib.parse, urllib.request, subprocess, re, threading
 
 RELAY_DIR = "/tmp/relay"
 CHUNK = 65536
+RELAY_TOKEN = "916de2678b4319090a640799f7ca7a6e"
 
 class RelayHandler(BaseHTTPRequestHandler):
     def _json(self, code, data):
@@ -13,12 +14,25 @@ class RelayHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _auth(self):
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {RELAY_TOKEN}":
+            return True
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if qs.get("token", [""])[0] == RELAY_TOKEN:
+            return True
+        return False
+
     def log_message(self, format, *args):
         pass
 
     def do_POST(self):
-        name = self.path.strip("/")
+        if not self._auth():
+            self._json(401, {"error": "unauthorized"})
+            return
+        name = self.path.strip("/").split("?")[0]
         if not name:
+            self.send_response(400); self.end_headers(); return
             self.send_response(400); self.end_headers(); return
 
         # /pull endpoint: VPS fetches file from agent through SSH tunnel
@@ -72,7 +86,10 @@ class RelayHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        name = self.path.strip("/")
+        if not self._auth():
+            self._json(401, {"error": "unauthorized"})
+            return
+        name = self.path.strip("/").split("?")[0]
 
         # /register: scan all active agents and return port mapping
         if name == "register":
@@ -97,7 +114,7 @@ class RelayHandler(BaseHTTPRequestHandler):
                     data = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
                         "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "r"}}}).encode()
                     req = urllib.request.Request(f"http://127.0.0.1:{p}/mcp", data, {
-                        "Content-Type": "application/json", "Authorization": "Bearer 234d130007706cd69359c94b89d3dd70"})
+                        "Content-Type": "application/json", "Authorization": "Bearer 916de2678b4319090a640799f7ca7a6e"})
                     r = urllib.request.urlopen(req, timeout=4)
                     body = json.loads(r.read())
                     if 'result' in body:
@@ -106,7 +123,7 @@ class RelayHandler(BaseHTTPRequestHandler):
                         data2 = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
                             "params": {"name": "shell", "arguments": {"command": "hostname", "timeout": 5}}}).encode()
                         req2 = urllib.request.Request(f"http://127.0.0.1:{p}/mcp", data2, {
-                            "Content-Type": "application/json", "Authorization": "Bearer 234d130007706cd69359c94b89d3dd70",
+                            "Content-Type": "application/json", "Authorization": "Bearer 916de2678b4319090a640799f7ca7a6e",
                             "Mcp-Session-Id": sid})
                         r2 = urllib.request.urlopen(req2, timeout=5)
                         body2 = json.loads(r2.read())
@@ -165,7 +182,10 @@ class RelayHandler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
 
     def do_DELETE(self):
-        name = self.path.strip("/")
+        if not self._auth():
+            self._json(401, {"error": "unauthorized"})
+            return
+        name = self.path.strip("/").split("?")[0]
         try: os.remove(f"{RELAY_DIR}/{name}")
         except: pass
         self.send_response(200); self.end_headers()
