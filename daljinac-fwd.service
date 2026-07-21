@@ -1,0 +1,15 @@
+[Unit]
+Description=Daljinac SSH port forward (RPi → VPS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ruter
+ExecStart=/home/ruter/bin/daljinac-fwd.sh
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
