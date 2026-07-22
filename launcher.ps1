@@ -2,7 +2,7 @@ param([switch]$Retry)
 
 # Self-elevate to admin, then install both agents from VPS relay
 if (![Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(527) -and !$Retry) {
-    Start-Process powershell -Verb RunAs -ArgumentList "-NoP -c $c=irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/launcher.ps1; &([scriptblock]::create(`$c)) -Retry"
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoP -c `$c=irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/launcher.ps1; &([scriptblock]::create(`$c)) -Retry"
     exit
 }
 
