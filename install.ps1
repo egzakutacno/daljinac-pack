@@ -35,13 +35,22 @@ foreach ($a in $agents) {
 
     Write-Host "  [2/3] Downloading..."
     mkdir $a.Dir -Force | Out-Null
-    $downloaded = $false
-    try {
-        Invoke-WebRequest $a.URL -Headers $auth -OutFile "$Exe.new" -UseBasicParsing -ErrorAction Stop
-        $sz = (Get-Item "$Exe.new").Length
-        if ($sz -gt 100000) { Write-Host "         $sz bytes" -ForegroundColor Green; $downloaded = $true }
-    } catch { }
-    if (-not $downloaded) { Write-Host "         FAILED" -ForegroundColor Red; continue }
+    $dl = $false
+    if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+        curl.exe -s -H "Authorization: Bearer 916de2678b4319090a640799f7ca7a6e" $a.URL -o "$Exe.new" 2>$null
+        $sz = (Get-Item "$Exe.new" -ErrorAction SilentlyContinue).Length
+        if ($sz -gt 100000) { Write-Host "         $sz bytes" -ForegroundColor Green; $dl = $true }
+    }
+    if (-not $dl) {
+        try {
+            $c = New-Object System.Net.WebClient
+            $c.Headers.Add("Authorization", "Bearer 916de2678b4319090a640799f7ca7a6e")
+            $c.DownloadFile($a.URL, "$Exe.new")
+            $sz = (Get-Item "$Exe.new" -ErrorAction SilentlyContinue).Length
+            if ($sz -gt 100000) { Write-Host "         $sz bytes" -ForegroundColor Green; $dl = $true }
+        } catch { }
+    }
+    if (-not $dl) { Write-Host "         FAILED" -ForegroundColor Red; continue }
 
     Write-Host "  [2b/3] Replacing..."
     Move-Item -Force "$Exe.new" $Exe
