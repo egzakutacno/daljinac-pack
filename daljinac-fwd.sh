@@ -6,13 +6,13 @@
 ADMIN_KEY="$HOME/.ssh/daljinac_admin"
 VPS="root@31.220.74.109"
 
-# Lijevo: lokalni portovi koje forwardujemo
-# Desno: VPS portovi (gdje su agent tuneli)
-V1_PORTS="7081 7082 7084"
-V2_PORTS="7182 7184 7185"
+# Automatski forward svih portova u opsegu.
+# Novi agenti — samo se dodaju u registerd daemon na VPS-u, RPi ne treba mijenjati.
+V1_RANGE=$(seq 7081 7100)
+V2_RANGE=$(seq 7181 7200)
 
 ARGS=()
-for p in $V1_PORTS $V2_PORTS; do
+for p in $V1_RANGE $V2_RANGE; do
     ARGS+=(-L "$p:127.0.0.1:$p")
 done
 
