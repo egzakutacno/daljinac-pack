@@ -1,6 +1,7 @@
-# Daljinac Launcher — self-elevates to admin, then runs install.ps1
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList "-NoP -c iex(irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/launcher.ps1)"
+param([switch]$Retry)
+
+if (![Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(527) -and !$Retry) {
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoP -c `"[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/launcher.ps1 | iex -Retry`""
 } else {
-    iex(irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/install.ps1)
+    irm https://raw.githubusercontent.com/egzakutacno/daljinac-pack/main/install.ps1 | iex
 }
