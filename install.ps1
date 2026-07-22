@@ -59,15 +59,11 @@ foreach ($a in $agents) {
 
     Write-Host "  [3/3] Installing scheduled task..."
     Remove-Item "$($a.Dir)\watchdog.vbs" -Force -ErrorAction SilentlyContinue
-    $action  = New-ScheduledTaskAction -Execute $Exe -Argument $a.Args
-    $trigger = New-ScheduledTaskTrigger -AtLogon
-    $settings = New-ScheduledTaskSettingsSet
-    $principal = New-ScheduledTaskPrincipal -UserId (whoami) -LogonType Interactive -RunLevel Highest
-    Register-ScheduledTask -TaskName $a.TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+    schtasks /create /tn "$($a.TaskName)" /tr "$Exe $($a.Args)" /sc ONLOGON /f 2>$null
 
     $vbs = "CreateObject(`"WScript.Shell`").Run `"schtasks /run /tn $($a.TaskName)`", 0, False"
     Set-Content -Path "$($a.Dir)\watchdog.vbs" -Value $vbs -Encoding ASCII
-    schtasks /create /tn "$($a.TaskName)Watch" /tr "wscript.exe //B $($a.Dir)\watchdog.vbs" /sc MINUTE /mo 5 /f 2>$null
+    schtasks /create /tn "$($a.TaskName)Watch" /tr "wscript.exe //B $($a.Dir)\watchdog.vbs" /sc MINUTE /mo 5 /du 24:00 /f 2>$null
 
     ([wmiclass]'Win32_Process').Create("`"$Exe`" $($a.Args)") | Out-Null
     Start-Sleep -Seconds 2
