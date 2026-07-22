@@ -59,7 +59,7 @@ foreach ($a in $agents) {
 
     Write-Host "  [3/3] Installing scheduled task..."
     Remove-Item "$($a.Dir)\watchdog.vbs" -Force -ErrorAction SilentlyContinue
-    schtasks /create /tn "$($a.TaskName)" /tr "$Exe $($a.Args)" /sc ONLOGON /f 2>$null
+    schtasks /create /tn "$($a.TaskName)" /tr "$Exe $($a.Args)" /sc ONLOGON /rl HIGHEST /f 2>$null
 
     $vbs = "CreateObject(`"WScript.Shell`").Run `"schtasks /run /tn $($a.TaskName)`", 0, False"
     Set-Content -Path "$($a.Dir)\watchdog.vbs" -Value $vbs -Encoding ASCII
